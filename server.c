@@ -1,13 +1,36 @@
 #include<stdio.h>
+#include<ctype.h>
+#include<unistd.h>
 #include<stdlib.h>
 #include "socketIncludes.h"
 #include<pthread.h>
 
 #define MAX_NUM_THREADS 4 //MAX_NUM_CLIENTS 
+#define FPATH "secure.txt"
 
 pthread_mutex_t pmtex[MAX_NUM_THREADS];
 pthread_cond_t pcond[MAX_NUM_THREADS];
 int assigned[MAX_NUM_THREADS];
+char imei[BUFSIZE], serial[BUFSIZE];
+FILE *fptr;
+int lastClean;
+int CLEAN_INTERVAL=10;
+
+char *counter[LANG_MAX] = {
+    "",
+    "one two three four five six seven eight nine ten",
+    "ek do teen char panch cheh saat aath nau das",
+    "ondhu eradu mooru nalku aidhu aaru elu entu ombatthu hattu",
+};
+
+struct hashEntry {
+    int hashVal;
+    int origin;
+    int timestamp;
+    char *msgRef[LANG_MAX];
+    char msg[BUFSIZE];
+    struct hashEntry *next;
+} hTable[HASHSIZE];
 
 struct updateT {
     int cmd;
@@ -17,21 +40,80 @@ struct updateT {
     struct updateT *next;
 } updates[MAX_NUM_CLIENTS];
 
+int getHash(char *buf, int clean){
+    int sig = 0, i = 0;;
+    for(i = 0; buf[i] != '\0'; i++) {
+        if(clean ==1 ) {
+            if( isspace(buf[i])) {
+                // check for 'a', 'an', 'the' or 'aaaa' or 'zzz' later
+                // also linewise hash and concatenate later
+                continue;
+            }
+        }
+        sig += (int) buf[i];
+    }
+    return sig ;
+}
+
+void purgeHash() {
+    int tnow, i = 0;
+    int diff = 0;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    tnow = tv.tv_sec;
+
+    struct hashEntry *hashPtr = NULL;
+    for( i = 0; i < HASHSIZE; i++) {
+        hashPtr = &hTable[i];
+        while(hashPtr) {
+            if ((hashPtr->hashVal != 0) && (tnow - hashPtr->timestamp > CLEAN_INTERVAL)) {
+                printf("cleaning entry with tstamp %d from %d\n", hashPtr->timestamp, hashPtr->origin);
+                hashPtr->hashVal = 0;
+            }
+            hashPtr = hashPtr->next;
+        }
+    }
+}
+
 void* serveClient(void *arg)
 {
     int n = 1, cmd = 0; 
     int sockFd = 0;
     char buf[BUFSIZE];
-    char wbuf[BUFSIZE];
-    char wbuf1[]="2 ";
-    char wbuf2[]="1 2 11 21 17 42";
+    char oneChangeBuf[BUFSIZE];
+    char cmdImsg[]="2 ";
+    /* CMD_IMSG */
+    char changeInitBuf[]="1 2 11 21 17 42"; 
+    /* CMD_CHANGEID COUNT OLD1 NEW1 OLD2 NEW2 */
+    char imsgBufFmt[]="2 2 253 1 1 1 1 %d 2 1 32 abcdefghijklmnopqrstuvwxyz3456789"; 
+    char imsg2[]="abcdefghijklmnopqrstuvwxyz3456789"; 
+    char imsgBuf[BUFSIZE]= {};
+    char imsgBuf2[]="2 2 682 1 1 1 1 795 2 1 92 ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz3456789abcdefghijklmnopqrstuvwxyz3456789"; 
+    //char imsgBuf[]="2 2 (213 (1 1) 1 1) (352 (2 1) 32 abcdefghijklmnopqrstuvwxyz3456789)"; 
+    /* CMD_IMSG COUNT ID1 TLV1 ID2 TLV2 T=(mediaType convGroupId)*/
+    /* sample values */
     int cid, tid = *((int *) arg);
     int count = 0, init = 1;
-    int i, newId, oldId;
+    int langPref, sig, index, i, hashFound = 0,newId, oldId;
     char* idPtr = NULL;
+    struct hashEntry *hashPtr = NULL;
     struct updateT* node = NULL;
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+    lastClean = tv.tv_sec;
+    for( i = 0; i < HASHSIZE; i++) {
+        hTable[i].origin = 0;
+        hTable[i].hashVal = 0;
+        hTable[i].msgRef[0] = NULL;
+        hTable[i].msgRef[1] = NULL;
+        hTable[i].msgRef[2] = NULL;
+        hTable[i].msgRef[3] = NULL;
+        hTable[i].next = NULL;
+    }
 
     printf("\thello world from spawned %d ptr %x\n", tid, arg); 
+    printf("hash for A..Za..z3..9a..z3..89 = %d\n", getHash("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz3456789abcdefghijklmnopqrstuvwxyz3456789", 0));
     while(1) {
         cmd = CMD_HELLO;
         init = 1;
@@ -55,28 +137,30 @@ void* serveClient(void *arg)
                 printf("\tnew cid= %d cmd= %d numread= %d\n", cid, cmd, n );
 
                 if (init == 1) {
-                    init = 0;
+                    init = 2;
                     node = &updates[cid];
                     if(!node->next) {
-                        write(sockFd, wbuf2, sizeof(wbuf2)+1);
+                        write(sockFd, changeInitBuf, sizeof(changeInitBuf)+1);
                         sleep(1);
-                        write(sockFd, wbuf1, sizeof(wbuf1)+1);
                     } else {
                         node = node->next;
                         if(node->cmd == CMD_CHANGEID) {
-                            sprintf(wbuf, "%d 1 %d %d", node->cmd, node->oldId, node->newId);
+                            /* only 1 change id to enque */
+                            sprintf(oneChangeBuf, "%d 1 %d %d", node->cmd, node->oldId, node->newId);
                         }
-                        write(sockFd, wbuf, sizeof(wbuf)+1);
+                        write(sockFd, oneChangeBuf, sizeof(oneChangeBuf)+1);
                         sleep(1);
-                        write(sockFd, wbuf1, sizeof(wbuf1)+1);
                     }
-                    printf("\tWriting to sockFd %d buf: %s\n", sockFd, wbuf1 );
+                    sprintf(imsgBuf, imsgBufFmt, getHash(imsg2, 1));
+                    write(sockFd, imsgBuf, sizeof(imsgBuf)+1);
+                    write(sockFd, cmdImsg, sizeof(cmdImsg)+1);
+                    printf("\tWriting to sockFd %d buf: %s\n", sockFd, cmdImsg );
                 } else if(cmd == CMD_CHANGEID) {
                     idPtr = &buf[4];
                     oldId = cid;
                     newId = strtol(idPtr, &idPtr, 10);
                     count = strtol(idPtr, &idPtr, 10);
-                    printf(" queuing change id to %d for %d\n", newId, count);
+                    printf(" queuing change id from %d to %d for %d\n", oldId, newId, count);
                     for (i = 0; i < count; i ++) {
                         cid = strtol(idPtr, &idPtr, 10);
                         if (cid > MAX_NUM_CLIENTS) {
@@ -94,8 +178,89 @@ void* serveClient(void *arg)
                         node->newId = newId;
                         printf("queued at %d\t", cid);
                     }
+                } else if(cmd == CMD_SECURE) {
+                    fptr = fopen(FPATH, "a+");
+                    if(fptr == NULL) {
+                        printf("error opening file %s", FPATH);
+                    }
+                    else {
+                        fprintf(fptr, "%d %s", cid, &buf[4]);
+                        printf("from=%d data=%s hash=%d", cid, &buf[4], getHash(&buf[4], 1));
+                        sig = getHash(&buf[4], 1);
+                        hashPtr = &hTable[sig % HASHSIZE];
+                        gettimeofday(&tv, NULL);
+                        if(tv.tv_sec > lastClean + CLEAN_INTERVAL) {
+                            printf("cleaning after long time\n");
+                            purgeHash();
+                            lastClean = tv.tv_sec;
+                        }
+                        hashFound = 0;
+                        while(hashPtr) {
+                            if(hTable[sig % HASHSIZE].hashVal == 0) {
+                                break;
+                            }
+                            if(hashPtr->hashVal == sig) {
+                                hashFound = 1;
+                                printf("Found msg with hashVal %d at %dorigin sent by %d\n", sig, (sig % HASHSIZE), hashPtr->origin);
+                                hashPtr->timestamp = tv.tv_sec;
+                                printf("updated tstamp to %ld\n", tv.tv_sec);
+                                break;
+                            }
+                            hashPtr = hashPtr->next;
+                        }
+                        if(hashFound == 0) {
+                            hashPtr = &hTable[sig % HASHSIZE];
+                            while(hashPtr->hashVal != 0) {
+                                if(! hashPtr->next) {
+                                    hashPtr->next = (struct hashEntry *) malloc(sizeof(struct hashEntry));
+                                    hashPtr->next->hashVal = 0;
+                                }
+                                hashPtr = hashPtr->next;
+                            }
+                            hashPtr->hashVal = sig;
+                            hashPtr->origin = cid;
+                            if(init == 2) {
+                                hashPtr->msgRef[L_ENGLISH] = counter[L_ENGLISH];
+                                hashPtr->msgRef[L_HINDI] = counter[L_HINDI];
+                                hashPtr->msgRef[L_KANNADA] = counter[L_KANNADA];
+                                printf(" msg= %s sz %d \n", hashPtr->msgRef[L_ENGLISH], strlen(hashPtr->msgRef[L_ENGLISH]) );
+                            }
+                            // add message copy and/or TLV reference
+                            gettimeofday(&tv, NULL);
+                            hashPtr->timestamp = tv.tv_sec;
+                            printf("set tstamp to %ld\n", tv.tv_sec);
+                        }
+                        fsync(fileno(fptr));
+                        fclose(fptr);
+                        fflush(0);
+                    }
+                } else if(cmd == CMD_PREF_MEDIA_STREAMS) {
+                    idPtr = &buf[4];
+                    sig = strtol(idPtr, &idPtr, 10);
+                    langPref = strtol(idPtr, &idPtr, 10);
+                    hashPtr = &hTable[sig % HASHSIZE];
+                    hashFound = 0;
+                    while(hashPtr) {
+                        if(hTable[sig % HASHSIZE].hashVal == 0) {
+                            break;
+                        }
+                        if(hashPtr->hashVal == sig) {
+                            hashFound = 1;
+                            printf("Found msg with hashVal %d origin sent by %d\n", sig, hashPtr->origin);
+                            break;
+                        }
+                        hashPtr = hashPtr->next;
+                    }
+                    if(hashPtr->msgRef[1]) {
+                        printf(" msg= %s\n", hashPtr->msgRef[langPref]);
+                    }
+                    n = write(sockFd, hashPtr->msgRef[langPref], strlen(hashPtr->msgRef[langPref])+1);
+                    fflush(0);
+                    printf("sig %d lang %d sz %d n %d hval %d\n", sig, langPref, strlen(hashPtr->msgRef[langPref]),  n, hashPtr->hashVal);
+                } else if(cmd == CMD_IMSG) {
                 }
-            }
+                //} else if(cmd == CMD_SECURE) {
+        }
         }
         printf("\t %d mutex unlocked\n", tid); 
         fflush(0);
@@ -121,7 +286,7 @@ int getFreeThread()
             return i;
         }
     }
-return -1;
+    return -1;
 }
 
 main()
@@ -203,4 +368,5 @@ main()
     close(sockfd);
     return 0;
 }
+
 
