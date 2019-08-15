@@ -32,13 +32,18 @@
 #define CMD_PREF_MEDIA_STREAMS 4
 #define CMD_VERIFY_MSG  5
 #define CMD_SECURE      6
-#define CMD_SIP_SUB     7
+#define CMD_SIP_SUB     7 /* TODO PENDING */
 #define CMD_TEXT_MIX    8
 #define CMD_STD_LOCAL_MIX 9
 #define CMD_HELLO       10
 #define CMD_EXIT        11
 
 
-// call-log timestamp from in/out/missed duration 
-// text-log  timestamp from  type length val
+// call-_id_log format
+// count
+// timestamp from in/out/missed duration 
+// 
+// text-_id_log format
+// count
+// timestamp from length val
 

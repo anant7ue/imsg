@@ -95,8 +95,8 @@ int main()
 		    {
 		      if (contacts[j] == oldId)
 			{
-			  printf
-			    ("%c %c updated contact from %d to %d ! Accept_Update (1) or No (0) ?\n",
+			  printf("%c %c updated contact from %d to %d !"
+                                 "Accept_Update (1) or No (0) ?\n",
 			     firstName[j], lastName[j], oldId, newId);
 			  scanf ("%d", &confirm);
 			  if (confirm == 1)
@@ -129,9 +129,8 @@ int main()
     }
   printf ("\n Total: %d\n", count);
 
-  printf
-    ("Connected to server... please type cmds... 10 for help %d to quit \n",
-     CMD_EXIT);
+  printf("Connected to server... please type cmds..."
+         "10 for help %d to quit \n", CMD_EXIT);
 
   while (cmd != CMD_EXIT)
     {
@@ -171,9 +170,8 @@ int main()
 	}
       else if (cmd == CMD_PREF_MEDIA_STREAMS)
 	{
-	  printf
-	    ("please sig (//enter multimedia preferences videoOff(0/1) and 2 Langs(1-english 2-hindi 3-kannada ...%d)\n",
-	     LANG_MAX);
+	  printf ("please sig (//enter multimedia preferences videoOff(0/1)"
+                "and 2 Langs(1-english 2-hindi 3-kannada ...%d)\n", LANG_MAX);
 	  scanf ("%d %d %d", &videoOff, &videoLang, &videoLang2);
 	  printf ("sending multimedia preferences\n");
 	  sprintf (msg, "%d %d %d %d %d ", myId, cmd, videoOff, videoLang,
@@ -220,19 +218,15 @@ int main()
 	  || (cmd == CMD_STD_LOCAL_MIX) || (cmd == CMD_RECOMMEND)
 	  || (cmd == CMD_LOCK_BOOT))
 	{
-	  //n = 0;
-	  //while(n == 0) {
 	  memset (msg, BUFSIZE, '\0');
 	  n = read (sockfd, buf, BUFSIZE);
 	  if (cmd == CMD_STD_LOCAL_MIX)
 	    {
 	      // decode + local file fill 
-	      sscanf (buf, "%c %c %d %s", &char1, &char2, &fillIndicator,
-		      msg);
+	      sscanf (buf, "%c %c %d %s", &char1, &char2, &fillIndicator, msg);
 	      if (fillIndicator == 12321)
 		{
-		  printf ("%c%c %s %s\n", char1, char2,
-			  "yes!localDetailsHere", msg);
+		  printf ("%c%c %s %s\n", char1, char2, "yes!localDetailsHere", msg);
 		}
 	      else if (fillIndicator == 121)
 		{
@@ -258,7 +252,6 @@ int main()
 	    }
 	  printf ("rcvd response sz %d buf %s\n", n, buf);
 	  fflush (0);
-	  //}
 	}
     }
 

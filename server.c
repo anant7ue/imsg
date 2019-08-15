@@ -170,9 +170,8 @@ serveClient (void *arg)
 	      sscanf (buf, "%d %d", &cid, &cmd);
 	      if (cid > MAX_NUM_CLIENTS)
 		{
-		  printf
-		    ("Error: client id %d exceeds range; closing connection\n",
-		     cid);
+		  printf ("Error: client id %d exceeds range;"
+                          "closing connection\n", cid);
 		  n = 0;
 		}
 	      printf ("\tnew cid= %d cmd= %d numread= %d\n", cid, cmd, n);
@@ -264,8 +263,8 @@ serveClient (void *arg)
 			  if (hashPtr->hashVal == sig)
 			    {
 			      hashFound = 1;
-			      printf
-				("Found msg with hashVal %d at %dorigin sent by %d\n",
+			      printf ("Found msg with hashVal %d at"
+                                       "%dorigin sent by %d\n",
 				 sig, (sig % HASHSIZE), hashPtr->origin);
 			      hashPtr->timestamp = tv.tv_sec;
 			      printf ("updated tstamp to %ld\n", tv.tv_sec);
@@ -501,15 +500,13 @@ serveClient (void *arg)
 		  fptr = fopen ("keyPart2", "w+");
 		  fprintf (fptr, "WXYZ");
 		  fclose (fptr);
-		  system
-		    ("sshpass -p ubuntu scp keyPart2 ubuntu@127.0.0.1:~ubuntu/imsg/key");
+		  system ("sshpass -p ubuntu scp keyPart2 ubuntu@127.0.0.1:~ubuntu/imsg/key");
 		  sprintf (imsgBuf, "ABCD");
 		  n = write (sockFd, imsgBuf, strlen (imsgBuf) + 1);
 		}
 	      else if (cmd == CMD_IMSG)
 		{
 		}
-	      //} else if(cmd == CMD_SECURE) {
 	    }
 	}
       fflush (0);
@@ -567,12 +564,6 @@ main ()
       pthread_mutex_init (&pmtex[n], NULL);
       pthread_cond_init (&pcond[n], NULL);
     }
-  /*
-     for(n = 0; n < MAX_NUM_THREADS; n++) 
-     {
-     cmd = *(int *) (&id[n]);
-     printf("n= %d val = %d\n",n,  cmd);
-     } */
 
   sockfd = socket (AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
