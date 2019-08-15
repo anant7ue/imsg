@@ -1,3 +1,4 @@
+
 #include<stdio.h>
 #include<stdlib.h>
 #include "socketIncludes.h"
@@ -15,12 +16,14 @@ int main()
 {
   int confirm = 0, n, sockfd = 0;
   int mcast, i, j, count = 0, cmd = -1;
-  int oldId, newId;
-  int msgIdVerify = 0, videoOff = 0, videoLang = 1;
+  int oldId, destId, newId, fillIndicator;
+  int msgIdVerify = 0, videoOff = 0, videoLang2 = 0, videoLang = 1;
   char *idptr;
   char msg[BUFSIZE] = { };
-  char buf[BUFSIZE] = { };
+  char localData[BUFSIZE] = { };
+  char char1, char2, buf[BUFSIZE] = { };
   struct sockaddr_in cliSock;
+  FILE *fData;
 
   sockfd = socket (AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
@@ -114,6 +117,7 @@ int main()
 	}
     }
 
+  n = read (sockfd, buf, BUFSIZE);
   printf ("Contacts After: \n");
   for (i = 0; i < MAX_NUM_CLIENTS; i++)
     {
@@ -126,7 +130,7 @@ int main()
   printf ("\n Total: %d\n", count);
 
   printf
-    ("Connected to server... please type cmds... 0 for help %d to quit \n",
+    ("Connected to server... please type cmds... 10 for help %d to quit \n",
      CMD_EXIT);
 
   while (cmd != CMD_EXIT)
@@ -139,9 +143,9 @@ int main()
       if (cmd == CMD_HELLO)
 	{
 	  printf
-	    ("Cmd help: CHANGEID 1 \t CMD_IMSG 2 \t CMD_COMBINE 3 \t CMD_PREF_MEDIA_STREAMS 4 \n"
-	     "CMD_VERIFY_MSG 5 \t CMD_SECURE 6 \t CMD_SIP_MISS_SUB 7\t "
-	     " CMD_TEXT_MIX 8 \n CMD_LOAD_ITEM 9 \t CMD_EXIT 10\n");
+	    ("Cmd help: CMD_LOCKBOOT 0 \t CMD_CHANGEID 1 \t CMD_IMSG 2 \t CMD_RECOMMEND 3 \n"
+	     "\t PREF_MEDIA_STREAMS 4 \t CMD_VERIFY_MSG 5 \t CMD_SECURE 6 \t CMD_SIP_SUB 7\n "
+	     "\t CMD_TEXT_MIX 8 \t CMD_STD_LOCAL_MIX 9 \t CMD_HELP 10 \n");
 	}
       if (cmd == CMD_CHANGEID)
 	{
@@ -168,11 +172,12 @@ int main()
       else if (cmd == CMD_PREF_MEDIA_STREAMS)
 	{
 	  printf
-	    ("please sig (//enter multimedia preferences videoOff(0/1) and Lang(1-english 2-hindi 3-kannada ...%d)\n",
+	    ("please sig (//enter multimedia preferences videoOff(0/1) and 2 Langs(1-english 2-hindi 3-kannada ...%d)\n",
 	     LANG_MAX);
-	  scanf ("%d %d", &videoOff, &videoLang);
+	  scanf ("%d %d %d", &videoOff, &videoLang, &videoLang2);
 	  printf ("sending multimedia preferences\n");
-	  sprintf (msg, "%d %d %d %d ", myId, cmd, videoOff, videoLang);
+	  sprintf (msg, "%d %d %d %d %d ", myId, cmd, videoOff, videoLang,
+		   videoLang2);
 	}
       else if (cmd == CMD_VERIFY_MSG)
 	{
@@ -180,27 +185,84 @@ int main()
 	  scanf ("%d ", &msgIdVerify);
 	  sprintf (msg, "%d %d %d ", myId, cmd, msgIdVerify);
 	}
+      else if (cmd == CMD_TEXT_MIX)
+	{
+	  sprintf (msg, "%d %d ", myId, cmd);
+	}
+      else if (cmd == CMD_RECOMMEND)
+	{
+	  sprintf (msg, "%d %d ", myId, cmd);
+	}
+      else if (cmd == CMD_STD_LOCAL_MIX)
+	{
+	  memset (msg, BUFSIZE, '\0');
+	  printf ("please enter dest_id \n");
+	  scanf ("%d", &destId);
+	  sprintf (msg, "%d %d %d ", myId, cmd, destId);
+	  printf ("%d %d %d sz=%d", myId, cmd, destId, strlen (msg));
+	  printf ("please enter  msg \n");
+	  scanf ("%s", msg + strlen (msg));
+	}
+      else if (cmd == CMD_LOCK_BOOT)
+	{
+	  sprintf (msg, "%d %d ", myId, cmd);
+	}
+      else if (cmd == CMD_SIP_SUB)
+	{
+	  sprintf (msg, "%d %d ", myId, cmd);
+	}
       else
 	{
 	  sprintf (msg, "%d %d cmd sent\n", myId, cmd);
 	}
       write (sockfd, msg, strlen (msg) + 1);
-      if (cmd == CMD_PREF_MEDIA_STREAMS)
+      if ((cmd == CMD_PREF_MEDIA_STREAMS) || (cmd == CMD_TEXT_MIX)
+	  || (cmd == CMD_STD_LOCAL_MIX) || (cmd == CMD_RECOMMEND)
+	  || (cmd == CMD_LOCK_BOOT))
 	{
-	  n = 0;
-	  while (n == 0)
+	  //n = 0;
+	  //while(n == 0) {
+	  memset (msg, BUFSIZE, '\0');
+	  n = read (sockfd, buf, BUFSIZE);
+	  if (cmd == CMD_STD_LOCAL_MIX)
 	    {
-	      n = read (sockfd, buf, BUFSIZE);
-	      //printf("rcvd response sz %d buf %s\n", n, buf);
-	      n = read (sockfd, buf, BUFSIZE);
-	      printf ("rcvd response sz %d buf %s\n", n, buf);
-	      fflush (0);
+	      // decode + local file fill 
+	      sscanf (buf, "%c %c %d %s", &char1, &char2, &fillIndicator,
+		      msg);
+	      if (fillIndicator == 12321)
+		{
+		  printf ("%c%c %s %s\n", char1, char2,
+			  "yes!localDetailsHere", msg);
+		}
+	      else if (fillIndicator == 121)
+		{
+		  memset (localData, BUFSIZE, 0);
+		  fData = fopen ("dataFile.txt", "r");
+		  fscanf (fData, "%s", localData);
+		  fclose (fData);
+		  printf ("%c%c %s %s\n", char1, char2, localData, msg);
+		}
 	    }
+	  if ((cmd == CMD_RECOMMEND) || (cmd == CMD_TEXT_MIX))
+	    {
+	      // print
+	    }
+	  else if (cmd == CMD_LOCK_BOOT)
+	    {
+	      sscanf (buf, "%s", msg);
+	      memset (localData, BUFSIZE, 0);
+	      fData = fopen ("key", "r");
+	      fscanf (fData, "%s", localData);
+	      fclose (fData);
+	      printf ("%s %s\n", localData, msg);
+	    }
+	  printf ("rcvd response sz %d buf %s\n", n, buf);
+	  fflush (0);
+	  //}
 	}
     }
 
   close (sockfd);
   return -1;
 }
-
 
