@@ -1,9 +1,9 @@
-#include <stdio.h>
-#include <ctype.h>
-#include <unistd.h>
-#include <stdlib.h>
+#include<stdio.h>
+#include<ctype.h>
+#include<unistd.h>
+#include<stdlib.h>
 #include "socketIncludes.h"
-#include <pthread.h>
+#include<pthread.h>
 
 #define MAX_NUM_THREADS   4 //MAX_NUM_CLIENTS 
 #define RECOMMEND_SIZE    3
@@ -45,6 +45,36 @@ struct updateT
   char msg[BUFSIZE];
   struct updateT *next;
 } updates[MAX_NUM_CLIENTS];
+
+int
+encrypt (char *buf, int id)
+{
+  int len = 0, sig = 0, i = 0;
+  int cid = 0, j = 0;
+  char keyStr[BUFSIZE];
+  memset (keyStr, '\0', BUFSIZE);
+  FILE *fptr = fopen ("keys.txt", "r");
+  while (cid != -1)
+    {
+      fscanf (fptr, "%d %s", &cid, keyStr);
+      if (cid == id)
+	break;
+    }
+  printf (" buf= %s len=%d\n", buf, i);
+  len = strlen (keyStr);
+  printf (" key= %s len=%d\n", keyStr, len);
+  for (i = 0; buf[i] != '\0'; i++)
+    {
+      buf[i] = buf[i] ^ keyStr[j];
+      j++;
+      if (j == len)
+	{
+	  j = 0;
+	}
+    }
+  return i;
+
+}
 
 int
 getHash (char *buf, int clean)
@@ -93,8 +123,7 @@ purgeHash ()
     }
 }
 
-void *
-serveClient (void *arg)
+void* serveClient(void *arg)
 {
   int n = 1, cmd = 0;
   int sockFd = 0;
@@ -121,7 +150,9 @@ serveClient (void *arg)
   struct updateT *node = NULL;
   struct timeval tv;
 
-  char bufCall[BUFSIZE] = { }, fName[BUFSIZE] = { };
+  char bufCall[BUFSIZE] = { }, fName[BUFSIZE] =
+  {
+  };
   char bufText[BUFSIZE] = { };
   int countText, tText, tCall, countCall, numText, numCall, len, lenCall,
     lenText;
@@ -170,8 +201,9 @@ serveClient (void *arg)
 	      sscanf (buf, "%d %d", &cid, &cmd);
 	      if (cid > MAX_NUM_CLIENTS)
 		{
-		  printf ("Error: client id %d exceeds range;"
-                          "closing connection\n", cid);
+		  printf
+		    ("Error: client id %d exceeds range; closing connection\n",
+		     cid);
 		  n = 0;
 		}
 	      printf ("\tnew cid= %d cmd= %d numread= %d\n", cid, cmd, n);
@@ -182,7 +214,8 @@ serveClient (void *arg)
 		  node = &updates[cid];
 		  if (!node->next)
 		    {
-		      write (sockFd, changeInitBuf, sizeof (changeInitBuf) + 1);
+		      write (sockFd, changeInitBuf,
+			     sizeof (changeInitBuf) + 1);
 		      sleep (1);
 		    }
 		  else
@@ -200,7 +233,9 @@ serveClient (void *arg)
 		  sprintf (imsgBuf, imsgBufFmt, getHash (imsg2, 1));
 		  write (sockFd, imsgBuf, sizeof (imsgBuf) + 1);
 		  write (sockFd, cmdImsg, sizeof (cmdImsg) + 1);
-		  printf ("\tWriting to sockFd %d buf: %s\n", sockFd, cmdImsg);
+		  printf ("\tWriting to sockFd %d buf: %s\n", sockFd,
+			  cmdImsg);
+
 		}
 	      else if (cmd == CMD_CHANGEID)
 		{
@@ -231,6 +266,7 @@ serveClient (void *arg)
 		      node->newId = newId;
 		      printf ("queued at %d\t", cid);
 		    }
+
 		}
 	      else if (cmd == CMD_SECURE)
 		{
@@ -263,8 +299,8 @@ serveClient (void *arg)
 			  if (hashPtr->hashVal == sig)
 			    {
 			      hashFound = 1;
-			      printf ("Found msg with hashVal %d at"
-                                       "%dorigin sent by %d\n",
+			      printf
+				("Found msg with hashVal %d at %dorigin sent by %d\n",
 				 sig, (sig % HASHSIZE), hashPtr->origin);
 			      hashPtr->timestamp = tv.tv_sec;
 			      printf ("updated tstamp to %ld\n", tv.tv_sec);
@@ -279,7 +315,8 @@ serveClient (void *arg)
 			    {
 			      if (!hashPtr->next)
 				{
-				  hashPtr->next = (struct hashEntry *)
+				  hashPtr->next =
+				    (struct hashEntry *)
 				    malloc (sizeof (struct hashEntry));
 				  hashPtr->next->hashVal = 0;
 				}
@@ -289,12 +326,15 @@ serveClient (void *arg)
 			  hashPtr->origin = cid;
 			  if (init == 2)
 			    {
-			      hashPtr->msgRef[L_ENGLISH] = counter[L_ENGLISH];
-			      hashPtr->msgRef[L_HINDI] = counter[L_HINDI];
-			      hashPtr->msgRef[L_KANNADA] = counter[L_KANNADA];
+			      hashPtr->msgRef[LANG_ENGLISH] =
+				counter[LANG_ENGLISH];
+			      hashPtr->msgRef[LANG_HINDI] =
+				counter[LANG_HINDI];
+			      hashPtr->msgRef[LANG_KANNADA] =
+				counter[LANG_KANNADA];
 			      printf (" msg = %s sz %d \n",
-				      hashPtr->msgRef[L_ENGLISH],
-				      strlen (hashPtr->msgRef[L_ENGLISH]));
+				      hashPtr->msgRef[LANG_ENGLISH],
+				      strlen (hashPtr->msgRef[LANG_ENGLISH]));
 			    }
 			  // add message copy and/or TLV reference
 			  gettimeofday (&tv, NULL);
@@ -305,6 +345,7 @@ serveClient (void *arg)
 		      fclose (fptr);
 		      fflush (0);
 		    }
+
 		}
 	      else if (cmd == CMD_PREF_MEDIA_STREAMS)
 		{
@@ -349,6 +390,7 @@ serveClient (void *arg)
 		  printf ("sig %d lang %d sz %d n %d hval %d\n", sig,
 			  langPref, strlen (hashPtr->msgRef[langPref]), n,
 			  hashPtr->hashVal);
+
 		}
 	      else if (cmd == CMD_TEXT_MIX)
 		{
@@ -432,6 +474,7 @@ serveClient (void *arg)
 		  // tstamp from len val ---- FMT
 		  // sort tstamps
 		  // write
+
 		}
 	      else if (cmd == CMD_STD_LOCAL_MIX)
 		{
@@ -458,6 +501,7 @@ serveClient (void *arg)
 		  // read newId, msg
 		  // compose msg from file + macro
 		  // if newId == cid, write else enQ
+
 		}
 	      else if (cmd == CMD_RECOMMEND)
 		{
@@ -500,13 +544,47 @@ serveClient (void *arg)
 		  fptr = fopen ("keyPart2", "w+");
 		  fprintf (fptr, "WXYZ");
 		  fclose (fptr);
-		  system ("sshpass -p ubuntu scp keyPart2 ubuntu@127.0.0.1:~ubuntu/imsg/key");
+		  system
+		    ("sshpass -p ubuntu scp keyPart2 ubuntu@127.0.0.1:~ubuntu/imsg/key");
 		  sprintf (imsgBuf, "ABCD");
 		  n = write (sockFd, imsgBuf, strlen (imsgBuf) + 1);
+
 		}
-	      else if (cmd == CMD_IMSG)
+	      else if (cmd == CMD_IMSG_DUP_MINI)
 		{
+		  memset (imsgBuf, '\0', BUFSIZE);
+		  sprintf (imsgBuf, "%d %d 12345 %s", cmd, cid, &buf[4]);
+		  printf ("%d 12345 %d  buf= %s", cmd, cid, &buf[4]);
+		  n = write (sockFd, imsgBuf, strlen (imsgBuf) + 1);
+
 		}
+	      else if (cmd == CMD_ENCRYPT_DE)
+		{
+		  memset (bufText, '\0', BUFSIZE);
+		  memset (imsgBuf, '\0', BUFSIZE);
+		  sprintf (bufText, "Account Balance: 1234567890");
+		  sprintf (imsgBuf, "%d ", getHash (bufText, 0));
+		  n = encrypt (bufText, cid);
+		  for (i = 0; i < n; i++)
+		    {
+		      sprintf (imsgBuf + strlen (imsgBuf), "%d ", bufText[i]);
+		    }
+		  printf ("sending crc=%d %s msg= %s",
+			  getHash ("Account Balance: 1234567890", 0), imsgBuf,
+			  "Account Balance: 1234567890");
+		  n = write (sockFd, imsgBuf, strlen (imsgBuf) + 1);
+
+		}
+	      else if (cmd == CMD_PROMO)
+		{
+		  memset (imsgBuf, '\0', BUFSIZE);
+		  printf ("NikeAdidasCokePepsi VideoSongMultiMedia");
+		  sprintf (imsgBuf,
+			   "NikeAdidasCokePepsi VideoSongMultiMedia");
+		  n = write (sockFd, imsgBuf, strlen (imsgBuf) + 1);
+
+		}
+	      //} else if(cmd == CMD_SECURE) {
 	    }
 	}
       fflush (0);
@@ -520,8 +598,7 @@ serveClient (void *arg)
   return NULL;
 }
 
-int
-getFreeThread ()
+int getFreeThread()
 {
   int i, numConn = 0;
 
@@ -537,7 +614,7 @@ getFreeThread ()
   return -1;
 }
 
-main ()
+main()
 {
   int sockfd, newFd = 0;
   socklen_t sockSz = sizeof (struct sockaddr);

@@ -1,4 +1,3 @@
-
 #include<stdio.h>
 #include<stdlib.h>
 #include "socketIncludes.h"
@@ -12,17 +11,25 @@ int contacts[MAX_NUM_CLIENTS];
 char firstName[MAX_NUM_CLIENTS];
 char lastName[MAX_NUM_CLIENTS];
 
+struct node
+{
+  int id;
+  char msg[BUFSIZE];
+  struct node *next;
+} head;
+
 int main()
 {
-  int confirm = 0, n, sockfd = 0;
-  int mcast, i, j, count = 0, cmd = -1;
+  int len, confirm = 0, n, sockfd = 0;
+  int miniFetch = 0, alertOverride = 0, mcast, i, j, count = 0, cmd = -1;
   int oldId, destId, newId, fillIndicator;
-  int msgIdVerify = 0, videoOff = 0, videoLang2 = 0, videoLang = 1;
+  int msgCrc, msgIdVerify = 0, videoOff = 0, videoLang2 = 0, videoLang = 1;
   char *idptr;
-  char msg[BUFSIZE] = { };
-  char localData[BUFSIZE] = { };
+  char inChar, msg[BUFSIZE] = { };
+  char promo[BUFSIZE], localData[BUFSIZE] = { };
   char char1, char2, buf[BUFSIZE] = { };
   struct sockaddr_in cliSock;
+  struct node *ptr = NULL;
   FILE *fData;
 
   sockfd = socket (AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -73,7 +80,7 @@ int main()
 	}
     }
   count = 0;
-  while (cmd != CMD_IMSG)
+  while (cmd != CMD_IMSG_DUP_MINI)
     {
       memset (buf, BUFSIZE, '\0');
       n = read (sockfd, buf, BUFSIZE);
@@ -95,8 +102,8 @@ int main()
 		    {
 		      if (contacts[j] == oldId)
 			{
-			  printf("%c %c updated contact from %d to %d !"
-                                 "Accept_Update (1) or No (0) ?\n",
+			  printf
+			    ("%c %c updated contact from %d to %d ! Accept_Update (1) or No (0) ?\n",
 			     firstName[j], lastName[j], oldId, newId);
 			  scanf ("%d", &confirm);
 			  if (confirm == 1)
@@ -110,7 +117,7 @@ int main()
 		  printf ("old %d new %d\n", oldId, newId);
 		}
 	    }
-	  else if (cmd == CMD_IMSG)
+	  else if (cmd == CMD_IMSG_DUP_MINI)
 	    {
 	      printf ("imsg archive buf start\n");
 	    }
@@ -129,8 +136,13 @@ int main()
     }
   printf ("\n Total: %d\n", count);
 
-  printf("Connected to server... please type cmds..."
-         "10 for help %d to quit \n", CMD_EXIT);
+  printf ("\n Please set alert override pref (0 or 1): \t");
+  scanf ("%d", &alertOverride);
+  printf ("\n Please set mini Fetch pref (0 or 1): \t");
+  scanf ("%d", &miniFetch);
+  printf
+    ("Connected to server... please type cmds... %d for help %d to quit \n",
+     CMD_HELP, CMD_EXIT);
 
   while (cmd != CMD_EXIT)
     {
@@ -142,9 +154,12 @@ int main()
       if (cmd == CMD_HELLO)
 	{
 	  printf
-	    ("Cmd help: CMD_LOCKBOOT 0 \t CMD_CHANGEID 1 \t CMD_IMSG 2 \t CMD_RECOMMEND 3 \n"
-	     "\t PREF_MEDIA_STREAMS 4 \t CMD_VERIFY_MSG 5 \t CMD_SECURE 6 \t CMD_SIP_SUB 7\n "
-	     "\t CMD_TEXT_MIX 8 \t CMD_STD_LOCAL_MIX 9 \t CMD_HELP 10 \n");
+	    ("Cmd help: CMD_LOCKBOOT 0 \t CMD_CHANGEID 1 \t CMD_IMSG_DUP_MINI 2 \t CMD_RECOMMEND 3 \n"
+	     "\t CMD_VERIFY_MSG 4 \t CMD_SIP_SUB 7 \t PREF_MEDIA_STREAMS 5 \t CMD_SECURE 6 \n"
+	     "\t CMD_TEXT_MIX 8 \t CMD_STD_LOCAL_MIX 9 \t CMD_PROMO 10 \n"
+	     "\t CMD_ALERT_OVERRIDE 11 \t CMD_ENCRYPT_DE 13 \t CMD_HELP 14 \n");
+	  // #define CMD_PIN_SEARCH_BAR  12 /*TODO */
+
 	}
       if (cmd == CMD_CHANGEID)
 	{
@@ -170,26 +185,21 @@ int main()
 	}
       else if (cmd == CMD_PREF_MEDIA_STREAMS)
 	{
-	  printf ("please sig (//enter multimedia preferences videoOff(0/1)"
-                "and 2 Langs(1-english 2-hindi 3-kannada ...%d)\n", LANG_MAX);
+	  printf
+	    ("please sig (//enter multimedia preferences videoOff(0/1) and 2 Langs(1-english 2-hindi 3-kannada ...%d)\n",
+	     LANG_MAX);
 	  scanf ("%d %d %d", &videoOff, &videoLang, &videoLang2);
 	  printf ("sending multimedia preferences\n");
 	  sprintf (msg, "%d %d %d %d %d ", myId, cmd, videoOff, videoLang,
 		   videoLang2);
+
 	}
       else if (cmd == CMD_VERIFY_MSG)
 	{
 	  printf ("please enter msg id to verify\n");
 	  scanf ("%d ", &msgIdVerify);
 	  sprintf (msg, "%d %d %d ", myId, cmd, msgIdVerify);
-	}
-      else if (cmd == CMD_TEXT_MIX)
-	{
-	  sprintf (msg, "%d %d ", myId, cmd);
-	}
-      else if (cmd == CMD_RECOMMEND)
-	{
-	  sprintf (msg, "%d %d ", myId, cmd);
+
 	}
       else if (cmd == CMD_STD_LOCAL_MIX)
 	{
@@ -200,33 +210,53 @@ int main()
 	  printf ("%d %d %d sz=%d", myId, cmd, destId, strlen (msg));
 	  printf ("please enter  msg \n");
 	  scanf ("%s", msg + strlen (msg));
+
 	}
-      else if (cmd == CMD_LOCK_BOOT)
+      else if (cmd == CMD_ALERT_OVERRIDE)
 	{
-	  sprintf (msg, "%d %d ", myId, cmd);
+	  printf ("Please use cmd IMSG_DUP_MINI \n");
+	  continue;
+
 	}
-      else if (cmd == CMD_SIP_SUB)
+      else if (cmd == CMD_IMSG_DUP_MINI)
 	{
-	  sprintf (msg, "%d %d ", myId, cmd);
+	  sprintf (msg, "%d %d %d %s", myId, cmd, myId, "hi");
+
 	}
       else
 	{
+	  // use separate else if when special msg to be tx
+	  // } else if (cmd == CMD_RECOMMEND) {
+	  // } else if (cmd == CMD_PROMO) {
+	  // } else if (cmd == CMD_SIP_SUB) {
+	  // } else if (cmd == CMD_ENCRYPT_DE) {
+	  // } else if (cmd == CMD_LOCK_BOOT) {
+	  // } else if (cmd == CMD_TEXT_MIX) {
 	  sprintf (msg, "%d %d cmd sent\n", myId, cmd);
 	}
       write (sockfd, msg, strlen (msg) + 1);
-      if ((cmd == CMD_PREF_MEDIA_STREAMS) || (cmd == CMD_TEXT_MIX)
-	  || (cmd == CMD_STD_LOCAL_MIX) || (cmd == CMD_RECOMMEND)
-	  || (cmd == CMD_LOCK_BOOT))
+
+      if ((cmd == CMD_PREF_MEDIA_STREAMS) ||
+	  (cmd == CMD_TEXT_MIX) ||
+	  (cmd == CMD_STD_LOCAL_MIX) ||
+	  (cmd == CMD_IMSG_DUP_MINI) ||
+	  (cmd == CMD_RECOMMEND) ||
+	  (cmd == CMD_PROMO) ||
+	  (cmd == CMD_ENCRYPT_DE) || (cmd == CMD_LOCK_BOOT))
 	{
+
 	  memset (msg, BUFSIZE, '\0');
 	  n = read (sockfd, buf, BUFSIZE);
+
 	  if (cmd == CMD_STD_LOCAL_MIX)
 	    {
 	      // decode + local file fill 
-	      sscanf (buf, "%c %c %d %s", &char1, &char2, &fillIndicator, msg);
+	      sscanf (buf, "%c %c %d %s", &char1, &char2, &fillIndicator,
+		      msg);
 	      if (fillIndicator == 12321)
 		{
-		  printf ("%c%c %s %s\n", char1, char2, "yes!localDetailsHere", msg);
+		  printf ("%c%c %s %s\n", char1, char2,
+			  "yes!localDetailsHere", msg);
 		}
 	      else if (fillIndicator == 121)
 		{
@@ -236,10 +266,41 @@ int main()
 		  fclose (fData);
 		  printf ("%c%c %s %s\n", char1, char2, localData, msg);
 		}
+
 	    }
-	  if ((cmd == CMD_RECOMMEND) || (cmd == CMD_TEXT_MIX))
+	  else if (cmd == CMD_ENCRYPT_DE)
 	    {
-	      // print
+	      printf ("please enter key to decrypt");
+	      newId = 0;
+	      scanf ("%s", localData);
+	      len = strlen (localData);
+	      sscanf (buf, "%d %n", &msgCrc, &n);
+	      i = n - 1;
+	      count = 0;
+	      printf ("crc %d i %d encoded %s\n", msgCrc, i, (buf + i));
+	      msgIdVerify = 0;
+	      for (j = 0; buf[i] != '\0'; count++)
+		{
+		  sscanf ((buf + i), "%d %n", &newId, &n);
+		  i += n;
+		  msg[count] = newId;
+		  msg[count] = msg[count] ^ localData[j];
+		  j++;
+		  if (j == len)
+		    {
+		      j = 0;
+		    }
+		  msgIdVerify += msg[count];
+		}
+	      if (msgIdVerify == msgCrc)
+		{
+		  printf ("\n%s %s idChk=%d\n", localData, msg, msgIdVerify);
+		}
+	      else
+		{
+		  printf ("Password incorrect\n");
+		}
+
 	    }
 	  else if (cmd == CMD_LOCK_BOOT)
 	    {
@@ -249,6 +310,74 @@ int main()
 	      fscanf (fData, "%s", localData);
 	      fclose (fData);
 	      printf ("%s %s\n", localData, msg);
+
+	    }
+	  else if (cmd == CMD_IMSG_DUP_MINI)
+	    {
+	      sscanf (buf, "%d %d", &newId, &msgIdVerify);
+	      ptr = &head;
+	      j = 0;
+	      if (ptr->id != 0)
+		{
+		  while (ptr->next)
+		    {
+		      if (ptr->id == msgIdVerify)
+			{
+			  j = 1;
+			  printf ("dup msg found %d\n", msgIdVerify);
+			}
+		      ptr = ptr->next;
+		    }
+		}
+	      if (j == 0)
+		{
+		  ptr->id = msgIdVerify;
+		  ptr->next = (struct node *) malloc (sizeof (struct node));
+		  ptr->next->id = 0;
+		}
+	      if (alertOverride == 1)
+		{
+		  if (miniFetch == 1)
+		    {
+		      printf ("rcvd from %d buf %s\n", newId, &buf[5]);
+		    }
+		  else
+		    {
+		      printf ("rcvd from %d buf %s\n", newId, buf);
+		    }
+		}
+	    }
+	  else if (cmd == CMD_PROMO)
+	    {
+	      memset (promo, BUFSIZE, 0);
+	      memset (msg, BUFSIZE, 0);
+	      sscanf (buf, "%s %s", promo, msg);
+	      printf ("rcvd promo %s \t data %s\n", promo, msg);
+	      printf ("left key to replay, any other key to exit");
+	      scanf (" %c", &inChar);
+	      printf ("rcvd cmd %d \n", inChar);
+	      j = 0;
+	      while (inChar == '\033')
+		{
+		  scanf ("%c", &inChar);
+		  j = 1;
+		  scanf ("%c", &inChar);
+		  switch (inChar)
+		    {
+		    case 'D':
+		      {
+			printf ("replaying promo... %s", promo);
+			break;
+		      }
+
+		    }
+		  scanf (" %c", &inChar);
+		}
+
+	    }
+	  if ((cmd == CMD_RECOMMEND) || (cmd == CMD_TEXT_MIX))
+	    {
+	      // print
 	    }
 	  printf ("rcvd response sz %d buf %s\n", n, buf);
 	  fflush (0);
@@ -258,4 +387,3 @@ int main()
   close (sockfd);
   return -1;
 }
-
